@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Library Book Connection — Prim's MST (Step-by-step)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root {
+      --bg: #f3f6fb;
+      --card: #ffffff;
+      --accent: #1e88e5;
+      --accent-2: #e53935;
+      --muted: #6b7280;
+    }
+    body {
+      margin: 12px;
+      font-family: Inter, system-ui, Arial, sans-serif;
+      background: linear-gradient(180deg,#eef4ff 0%, var(--bg) 100%);
+      color: #111827;
+    }
+    h1 { font-size: 20px; margin: 6px 0 10px; text-align:center; }
+    .wrap {
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      gap: 14px;
+      align-items: start;
+      max-width: 1180px;
+      margin: 0 auto;
+    }
+    .card {
+      background: var(--card);
+      border-radius: 12px;
+      box-shadow: 0 6px 20px rgba(17,24,39,0.06);
+      padding: 14px;
+    }
+    .left { padding: 8px; }
+    canvas { width: 100%; height: 540px; border-radius: 8px; background: white; display:block; }
+    .controls { display:flex; flex-direction: column; gap: 10px; }
+    .row { display:flex; gap:8px; align-items: center; flex-wrap:wrap; }
+    input[type="number"], .btn {
+      padding: 8px 10px; border-radius:8px; border:1px solid #e6eef7; font-size:13px;
+    }
+    .btn { background:var(--accent); color:white; cursor:pointer; border:none; }
+    .btn.warn { background:var(--accent-2); }
+    .btn.ghost { background:transparent; color:var(--accent); border:1px solid var(--accent); }
+    .small { font-size:13px; color:var(--muted); }
+    .stateBox { background:#f8fafc; padding:8px; border-radius:8px; border:1px dashed #e6eef7; }
+    pre { margin:0; font-size:13px; overflow:auto; }
+    .arrays { display:grid; gap:8px; margin-top:6px; }
+    .arrays .aRow { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .chip { background:#fff; border-radius:6px; padding:6px 8px; border:1px solid #eee; font-size:13px; }
+    .legend { display:flex; gap:8px; align-items:center; margin-top:6px; }
+    .swatch { width:14px; height:14px; border-radius:3px; display:inline-block; margin-right:6px; }
+    footer { text-align:center; color:var(--muted); font-size:13px; margin-top:12px; }
+  </style>
+</head>
+<body>
+  <h1>📚 Library Book Connection — Prim's MST (Interactive Step-by-step)</h1>
+
+  <div class="wrap">
+    <!-- LEFT: Canvas -->
+    <div class="card left">
+      <canvas id="libraryCanvas" width="760" height="540"></canvas>
+      <div style="display:flex; justify-content:space-between; margin-top:10px;">
+        <div class="small">Click canvas to add a shelf (when "Add Mode" is ON).</div>
+        <div style="display:flex; gap:8px;">
+          <label class="small">Show weights <input id="showWeights" type="checkbox" checked></label>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Controls & State -->
+    <div class="card">
+      <div class="controls">
+        <div class="row">
+          <input id="shelfCount" type="number" min="2" max="50" placeholder="Number of shelves (e.g., 6)">
+          <button class="btn" id="btnGenerate">Generate</button>
+          <button class="btn ghost" id="btnClear">Clear</button>
+          <button class="btn" id="btnSave">Save PNG</button>
+        </div>
+
+        <div class="row">
+          <button class="btn" id="btnBuild">Build Steps (Prim)</button>
+          <button class="btn" id="btnNext">Next Step ▶</button>
+          <button class="btn" id="btnPlay">Play ►</button>
+          <label class="small">Speed <input id="speed" type="range" min="200" max="2000" value="700"></label>
+        </div>
+
+        <div class="row">
+          <label class="small"><input type="checkbox" id="addMode"> Add Mode (click canvas)</label>
+          <button class="btn warn" id="btnReset">Reset Demo</button>
+        </div>
+
+        <div class="stateBox">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <strong>Algorithm state</strong>
+            <div class="small" id="currentStep">Step: 0 / 0</div>
+          </div>
+          <div class="arrays">
+            <div class="aRow"><div class="small">key:</div> <pre id="keyView" class="chip">[]</pre></div>
+            <div class="aRow"><div class="small">parent:</div> <pre id="parentView" class="chip">[]</pre></div>
+            <div class="aRow"><div class="small">inMST:</div> <pre id="inMSTView" class="chip">[]</pre></div>
+            <div class="aRow"><div class="small">Total MST cost:</div> <div id="costView" class="chip">0</div></div>
+          </div>
+        </div>
+
+        <div class="stateBox">
+          <strong>What happens each step?</strong>
+          <p class="small" style="margin:6px 0;">
+            • <strong>Select node</strong>: pick node with smallest <em>key</em> not already in MST.<br>
+            • <strong>Include</strong>: that node becomes part of the MST.<br>
+            • <strong>Consider/Update</strong>: for each neighbour, if edge weight is smaller than its current key → update parent & key.
+          </p>
+        </div>
+
+        <div class="legend small">
+          <div><span class="swatch" style="background: #ddd; border:1px solid #eee"></span>All edges</div>
+          <div><span class="swatch" style="background: var(--accent)"></span>Nodes</div>
+          <div><span class="swatch" style="background: var(--accent-2)"></span>MST edges</div>
+          <div><span class="swatch" style="background: orange"></span>Current considered edge</div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <footer class="small">Tip: Click <strong>Build Steps</strong> then press <strong>Next Step</strong> to see Prim build the MST step-by-step. Use Play for automatic animation.</footer>
+
+<script>
+window.addEventListener('load', () => {
+  const canvas = document.getElementById('libraryCanvas');
+  const ctx = canvas.getContext('2d');
+  ctx.font = "12px Inter, Arial";
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  const btnGenerate = document.getElementById('btnGenerate');
+  const btnClear = document.getElementById('btnClear');
+  const btnSave = document.getElementById('btnSave');
+  const btnBuild = document.getElementById('btnBuild');
+  const btnNext = document.getElementById('btnNext');
+  const btnPlay = document.getElementById('btnPlay');
+  const btnReset = document.getElementById('btnReset');
+  const speedInput = document.getElementById('speed');
+  const shelfCountInput = document.getElementById('shelfCount');
+  const addModeCheckbox = document.getElementById('addMode');
+  const showWeightsCheckbox = document.getElementById('showWeights');
+
+  const keyView = document.getElementById('keyView');
+  const parentView = document.getElementById('parentView');
+  const inMSTView = document.getElementById('inMSTView');
+  const costView = document.getElementById('costView');
+  const currentStepView = document.getElementById('currentStep');
+
+  let nodes = [];
+  let graph = [];
+  let V = 0;
+
+  let steps = [];
+  let stepIndex = 0;
+  let playing = false;
+  let playTimer = null;
+
+  let key = [];
+  let parent = [];
+  let inMST = [];
+
+  function clearCanvas() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+  }
+
+  function drawAllEdges() {
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#eee';
+    for (let i=0;i<V;i++){
+      for (let j=i+1;j<V;j++){
+        ctx.beginPath();
+        ctx.moveTo(nodes[i].x, nodes[i].y);
+        ctx.lineTo(nodes[j].x, nodes[j].y);
+        ctx.stroke();
+        if (showWeightsCheckbox.checked) {
+          const mx = (nodes[i].x + nodes[j].x) / 2;
+          const my = (nodes[i].y + nodes[j].y) / 2;
+          ctx.fillStyle = '#999';
+          ctx.fillText(Math.round(graph[i][j]), mx, my);
+        }
+      }
+    }
+  }
+
+  function drawNodes() {
+    for (let i=0;i<V;i++){
+      ctx.beginPath();
+      ctx.arc(nodes[i].x, nodes[i].y, 14, 0, Math.PI*2);
+      ctx.fillStyle = '#1e88e5';
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.fillText(String(i), nodes[i].x, nodes[i].y);
+      if (inMST[i]) {
+        ctx.beginPath();
+        ctx.arc(nodes[i].x, nodes[i].y, 20, 0, Math.PI*2);
+        ctx.strokeStyle = 'rgba(229,57,53,0.18)';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+      }
+    }
+  }
+
+  function drawMSTEdges() {
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#e53935';
+    for (let v=0; v<V; v++){
+      const u = parent[v];
+      if (u !== -1 && inMST[v] && inMST[u]) {
+        ctx.beginPath();
+        ctx.moveTo(nodes[u].x, nodes[u].y);
+        ctx.lineTo(nodes[v].x, nodes[v].y);
+        ctx.stroke();
+      }
+    }
+  }
+
+  function drawConsiderEdge(u, v) {
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'orange';
+    ctx.beginPath();
+    ctx.moveTo(nodes[u].x, nodes[u].y);
+    ctx.lineTo(nodes[v].x, nodes[v].y);
+    ctx.stroke();
+    if (showWeightsCheckbox.checked) {
+      const mx = (nodes[u].x + nodes[v].x) / 2;
+      const my = (nodes[u].y + nodes[v].y) / 2;
+      ctx.fillStyle = '#333';
+      ctx.fillText(graph[u][v].toFixed(1), mx, my - 12);
+    }
+  }
+
+  function renderScene(currentConsider=null) {
+    clearCanvas();
+    if (V > 1) drawAllEdges();
+    drawNodes();
+    drawMSTEdges();
+    if (currentConsider) drawConsiderEdge(currentConsider.u, currentConsider.v);
+  }
+
+  // Build adjacency matrix using user input
+  function buildGraph() {
+    V = nodes.length;
+    graph = Array.from({length: V}, () => Array(V).fill(0));
+    for (let i=0;i<V;i++){
+      for (let j=i+1;j<V;j++){
+        let w = prompt(`Enter weight for edge ${i} ↔ ${j}:`, "1");
+        w = parseFloat(w);
+        if (isNaN(w) || w <= 0) w = 1;
+        graph[i][j] = graph[j][i] = w;
+      }
+    }
+  }
+
+  function initRuntimeArrays() {
+    key = Array(V).fill(Infinity);
+    parent = Array(V).fill(-1);
+    inMST = Array(V).fill(false);
+    key[0] = 0;
+  }
+
+  function createPrimSteps() {
+    steps = [];
+    initRuntimeArrays();
+    for (let count=0; count<V-1; count++) {
+      let u = -1, min = Infinity;
+      for (let v=0; v<V; v++) {
+        if (!inMST[v] && key[v] < min) { min = key[v]; u = v; }
+      }
+      if (u === -1) break;
+      steps.push({ type:"include", u });
+      inMST[u] = true;
+      for (let v=0; v<V; v++) {
+        if (graph[u][v] && !inMST[v] && graph[u][v] < key[v]) {
+          steps.push({ type:"consider", u, v });
+          key[v] = graph[u][v];
+          parent[v] = u;
+        }
+      }
+    }
+    initRuntimeArrays();
+    stepIndex = 0;
+  }
+
+  function applyStep(step) {
+    if (!step) return;
+    if (step.type === "include") {
+      inMST[step.u] = true;
+    } else if (step.type === "consider") {
+      parent[step.v] = step.u;
+      key[step.v] = graph[step.u][step.v];
+    }
+    updateStateViews();
+    renderScene(step.type === "consider" ? step : null);
+  }
+
+  function updateStateViews() {
+    keyView.textContent = JSON.stringify(key.map(v => Math.round(v)));
+    parentView.textContent = JSON.stringify(parent);
+    inMSTView.textContent = JSON.stringify(inMST);
+    let cost = 0;
+    for (let v=1; v<V; v++) if (parent[v] !== -1) cost += graph[v][parent[v]];
+    costView.textContent = cost.toFixed(1);
+    currentStepView.textContent = `Step: ${stepIndex} / ${steps.length}`;
+  }
+
+  // Generate random shelves
+  function generateShelves(count) {
+    nodes = [];
+    for (let i=0;i<count;i++) {
+      nodes.push({
+        x: Math.random() * (canvas.width-60) + 30,
+        y: Math.random() * (canvas.height-60) + 30
+      });
+    }
+    renderScene();
+  }
+
+  // --- Event Listeners ---
+  btnGenerate.addEventListener('click', () => {
+    const count = parseInt(shelfCountInput.value) || 6;
+    generateShelves(count);
+  });
+
+  btnClear.addEventListener('click', () => {
+    nodes = [];
+    graph = [];
+    V = 0;
+    renderScene();
+    updateStateViews();
+  });
+
+  btnSave.addEventListener('click', () => {
+    const link = document.createElement('a');
+    link.download = 'library_mst.png';
+    link.href = canvas.toDataURL();
+    link.click();
+  });
+
+  btnBuild.addEventListener('click', () => {
+    if (nodes.length === 0) return;
+    buildGraph();
+    createPrimSteps();
+    updateStateViews();
+    renderScene();
+  });
+
+  btnNext.addEventListener('click', () => {
+    if (stepIndex < steps.length) {
+      applyStep(steps[stepIndex]);
+      stepIndex++;
+    }
+  });
+
+  btnPlay.addEventListener('click', () => {
+    if (playing) {
+      clearInterval(playTimer);
+      playing = false;
+      btnPlay.textContent = "Play ►";
+    } else {
+      playing = true;
+      btnPlay.textContent = "Pause ❚❚";
+      playTimer = setInterval(() => {
+        if (stepIndex < steps.length) {
+          applyStep(steps[stepIndex]);
+          stepIndex++;
+        } else {
+          clearInterval(playTimer);
+          playing = false;
+          btnPlay.textContent = "Play ►";
+        }
+      }, parseInt(speedInput.value));
+    }
+  });
+
+  btnReset.addEventListener('click', () => {
+    nodes = [];
+    generateShelves(6);
+    renderScene();
+    steps = [];
+    stepIndex = 0;
+    updateStateViews();
+  });
+
+  canvas.addEventListener('click', e => {
+    if (!addModeCheckbox.checked) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+    nodes.push({ x, y });
+    renderScene();
+  });
+
+  // Initial setup
+  generateShelves(6);
+  updateStateViews();
+  renderScene();
+});
+</script>
+</body>
+</html>
